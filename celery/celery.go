@@ -29,7 +29,10 @@ func main() {
 		Conn: conn,
 	}
 
-	fmt.Println(broker)
+	broker.Conn.Connect()
+	ms, _ := broker.Conn.Consume()
 
-	// Release all the workers!!
+	for m := range ms {
+		fmt.Println(m.Body)
+	}
 }
