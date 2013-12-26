@@ -7,7 +7,6 @@ type Connection interface {
 	Connect() error
 	Disconnect() error
 	Consume() (<-chan *Message, error)
-	Ack(m *Message) error
 }
 
 // has the connection to start the process of getting tasks
