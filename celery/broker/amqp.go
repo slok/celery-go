@@ -102,7 +102,6 @@ func (c *AmqpConnection) Connect() error {
 		return err
 	}
 
-	fmt.Println(c)
 	return nil
 }
 
@@ -136,7 +135,7 @@ func (c *AmqpConnection) Consume() (<-chan *Message, error) {
 	// custom local format
 	go func() {
 		for m := range msgs {
-			resultChannel <- c.convertMessage(m)
+			resultChannel <- c.convertMessage(&m)
 		}
 	}()
 
@@ -215,11 +214,17 @@ func (c *AmqpConnection) bind(name, routingKey string, e *Exchange, q *Queue) (*
 }
 
 // Converts an amqp message to a custom message
-func (c *AmqpConnection) convertMessage(m amqp.Delivery) *Message {
+func (c *AmqpConnection) convertMessage(m *amqp.Delivery) *Message {
 	return &Message{
 		ContentType: m.ContentType,
 		Body:        m.Body,
+		Original:    m,
 	}
+}
+
+func (c *AmqpConnection) Ack(m *Message) error {
+	d := m.Original.(*amqp.Delivery)
+	return d.Ack(false)
 }
 
 // Aux types
