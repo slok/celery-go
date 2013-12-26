@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/slok/celery-go.png?label=ready)](https://waffle.io/slok/celery-go)  
 celery-go
 =========
 
