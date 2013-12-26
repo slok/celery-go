@@ -123,13 +123,24 @@ func (c *AmqpConnection) Disconnect() error {
 
 // Start consumming from the connection, returns a channel where the
 // messages will be delivered
-func (c *AmqpConnection) Consume() (<-chan amqp.Delivery, error) {
+func (c *AmqpConnection) Consume() (<-chan *Message, error) {
 	msgs, err := c.channel.Consume(c.queue.name, "", autoAck, exclusive, false, noWait, nil)
+
 	if err != nil {
 		return nil, errors.New("Failed consuming queue")
 	}
 
-	return msgs, nil
+	resultChannel := make(chan *Message)
+
+	// this coroutine will get the messages from the amqp and will convert to a
+	// custom local format
+	go func() {
+		for m := range msgs {
+			resultChannel <- c.convertMessage(m)
+		}
+	}()
+
+	return resultChannel, nil
 }
 
 func (c AmqpConnection) createChannel() (*amqp.Channel, error) {
@@ -201,6 +212,14 @@ func (c *AmqpConnection) bind(name, routingKey string, e *Exchange, q *Queue) (*
 
 	return b, nil
 
+}
+
+// Converts an amqp message to a custom message
+func (c *AmqpConnection) convertMessage(m amqp.Delivery) *Message {
+	return &Message{
+		ContentType: m.ContentType,
+		Body:        m.Body,
+	}
 }
 
 // Aux types
