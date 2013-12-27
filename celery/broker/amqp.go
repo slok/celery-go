@@ -3,6 +3,7 @@ package broker
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/streadway/amqp"
@@ -44,6 +45,7 @@ type AmqpConnection struct {
 // Default constructor
 func NewAmqpConnection(params map[string]string) (*AmqpConnection, error) {
 	// TODO use params instead of defaults
+	log.Println("New AMQP connection object created")
 	return new(AmqpConnection), nil
 }
 
@@ -117,6 +119,7 @@ func (c *AmqpConnection) Disconnect() error {
 		return errors.New("Failed to close connection")
 	}
 
+	log.Println("Connected to Rabbitmq")
 	return nil
 }
 
@@ -126,6 +129,7 @@ func (c *AmqpConnection) Consume() (<-chan *Message, error) {
 	msgs, err := c.channel.Consume(c.queue.name, "", autoAck, exclusive, false, noWait, nil)
 
 	if err != nil {
+		log.Println("Failed consuming queue")
 		return nil, errors.New("Failed consuming queue")
 	}
 
@@ -133,8 +137,10 @@ func (c *AmqpConnection) Consume() (<-chan *Message, error) {
 
 	// this coroutine will get the messages from the amqp and will convert to a
 	// custom local format
+	log.Println("Start consuming from queue")
 	go func() {
 		for m := range msgs {
+			log.Println("Received package")
 			resultChannel <- c.convertMessage(&m)
 		}
 	}()
@@ -147,9 +153,10 @@ func (c AmqpConnection) createChannel() (*amqp.Channel, error) {
 	channel, err := c.conn.Channel()
 
 	if err != nil {
+		log.Println("Failed to connect to RabbitMQ")
 		return nil, errors.New("Failed to connect to RabbitMQ")
 	}
-
+	log.Println("Created channel")
 	return channel, nil
 }
 
@@ -166,9 +173,10 @@ func (c *AmqpConnection) declareQueue(q *Queue) error {
 	)
 
 	if err != nil {
+		log.Println("Failed to declare queue")
 		return errors.New("Failed to declare queue")
 	}
-
+	log.Println("Declared queue")
 	return nil
 }
 
@@ -186,9 +194,11 @@ func (c *AmqpConnection) declareExchange(e *Exchange) error {
 	)
 
 	if err != nil {
+		log.Println("Failed to declare exchange")
 		return errors.New("Failed to declare exchange")
 	}
 
+	log.Println("Declared exchange")
 	return nil
 }
 
@@ -196,6 +206,7 @@ func (c *AmqpConnection) declareExchange(e *Exchange) error {
 func (c *AmqpConnection) bind(name, routingKey string, e *Exchange, q *Queue) (*Binding, error) {
 	err := c.channel.QueueBind(q.name, routingKey, e.name, q.noWait, nil)
 	if err != nil {
+		log.Println("Failed to Bind queue to exchange")
 		return nil, errors.New("Failed to Bind queue to exchange")
 	}
 
@@ -209,6 +220,7 @@ func (c *AmqpConnection) bind(name, routingKey string, e *Exchange, q *Queue) (*
 	// This way we could obtain all the bindings of each exchange
 	e.bindings = append(e.bindings, b)
 
+	log.Println("Binded exchange with channel")
 	return b, nil
 
 }
