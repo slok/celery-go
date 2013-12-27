@@ -10,28 +10,29 @@ import (
 )
 
 var (
-	format = "amqp://%v:%v@%v:%d/"
+	defaultFormat = "amqp://%v:%v@%v:%d/"
 
 	// Channel Connection defaults
-	user = "guest"
-	pass = "guest"
-	host = "localhost"
-	port = 5672
+	defaultUser = "guest"
+	defaultPass = "guest"
+	defaultHost = "localhost"
+	defaultPort = 5672
 
 	// dispatching defauls
-	exchangeName     = "celery"
-	routingKey       = "celery"
-	queueName        = "celery"
-	exchangeType     = "direct"
-	durable          = true
-	DeleteWhenUnUsed = false
-	exclusive        = false
-	noWait           = false
-	autoAck          = false
+	defaultExchangeName     = "celery"
+	defaultRoutingKey       = "celery"
+	defaultQueueName        = "celery"
+	defaultExchangeType     = "direct"
+	defaultDurable          = true
+	defaultDeleteWhenUnUsed = false
+	defaultExclusive        = false
+	defaultNoWait           = false
+	defaultAutoAck          = false
 )
 
 type AmqpConnection struct {
-	// Connection params
+	// settings
+	params map[string]interface{}
 
 	// Connection stuff
 	conn    *amqp.Connection
@@ -42,17 +43,53 @@ type AmqpConnection struct {
 	exchange *Exchange
 }
 
+func loadSettings(params *map[string]interface{}) {
+	// Load default params if not present
+
+	checkSetting := func(key string, dParam interface{}) {
+		if _, ok := (*params)[key]; !ok {
+			(*params)[key] = dParam
+		}
+	}
+
+	checkSetting("format", defaultFormat)
+	checkSetting("user", defaultUser)
+	checkSetting("pass", defaultPass)
+	checkSetting("host", defaultHost)
+	checkSetting("port", defaultPort)
+	checkSetting("exchangeName", defaultExchangeName)
+	checkSetting("routingKey", defaultRoutingKey)
+	checkSetting("queueName", defaultQueueName)
+	checkSetting("exchangeType", defaultExchangeType)
+	checkSetting("durable", defaultDurable)
+	checkSetting("deleteWhenUnUsed", defaultDeleteWhenUnUsed)
+	checkSetting("exclusive", defaultExclusive)
+	checkSetting("noWait", defaultNoWait)
+	checkSetting("autoAck", defaultAutoAck)
+
+}
+
 // Default constructor
-func NewAmqpConnection(params map[string]string) (*AmqpConnection, error) {
-	// TODO use params instead of defaults
+func NewAmqpConnection(params map[string]interface{}) (*AmqpConnection, error) {
+
 	log.Println("New AMQP connection object created")
-	return new(AmqpConnection), nil
+	a := new(AmqpConnection)
+
+	// Load settings (default ones if neccesary)
+	loadSettings(&params)
+
+	a.params = params
+	return a, nil
 }
 
 // Creates a new amqp connection
 func (c *AmqpConnection) Connect() error {
 	var err error
-	connString := fmt.Sprintf(format, user, pass, host, port)
+	connString := fmt.Sprintf(c.params["format"].(string),
+		c.params["user"].(string),
+		c.params["pass"].(string),
+		c.params["host"].(string),
+		c.params["port"].(int))
 
 	c.conn, err = amqp.Dial(connString)
 	if err != nil {
@@ -66,11 +103,11 @@ func (c *AmqpConnection) Connect() error {
 
 	// Set the queue and the exchange
 	c.queue = &Queue{
-		name:             queueName,
-		durable:          durable,
-		deleteWhenUnUsed: DeleteWhenUnUsed,
-		exclusive:        exclusive,
-		noWait:           noWait,
+		name:             c.params["queueName"].(string),
+		durable:          c.params["durable"].(bool),
+		deleteWhenUnUsed: c.params["deleteWhenUnUsed"].(bool),
+		exclusive:        c.params["exclusive"].(bool),
+		noWait:           c.params["noWait"].(bool),
 		params:           nil,
 	}
 
@@ -80,12 +117,12 @@ func (c *AmqpConnection) Connect() error {
 	}
 
 	c.exchange = &Exchange{
-		name:             queueName,
-		exchangeType:     exchangeType,
-		durable:          durable,
-		deleteWhenUnUsed: DeleteWhenUnUsed,
-		exclusive:        exclusive,
-		noWait:           noWait,
+		name:             c.params["queueName"].(string),
+		exchangeType:     c.params["exchangeType"].(string),
+		durable:          c.params["durable"].(bool),
+		deleteWhenUnUsed: c.params["deleteWhenUnUsed"].(bool),
+		exclusive:        c.params["exclusive"].(bool),
+		noWait:           c.params["noWait"].(bool),
 		params:           nil,
 		bindings:         []*Binding{},
 	}
@@ -98,8 +135,11 @@ func (c *AmqpConnection) Connect() error {
 	// One exchange to rule them all,
 	// One queue to find them,
 	// One routing key to bring them all and in the darkness bind them
-	bindingName := strings.Join([]string{exchangeName, routingKey}, "/")
-	_, err = c.bind(bindingName, routingKey, c.exchange, c.queue)
+	bindingName := strings.Join([]string{
+		c.params["exchangeName"].(string),
+		c.params["routingKey"].(string)},
+		"/")
+	_, err = c.bind(bindingName, c.params["routingKey"].(string), c.exchange, c.queue)
 	if err != nil {
 		return err
 	}
@@ -126,7 +166,13 @@ func (c *AmqpConnection) Disconnect() error {
 // Start consumming from the connection, returns a channel where the
 // messages will be delivered
 func (c *AmqpConnection) Consume() (<-chan *Message, error) {
-	msgs, err := c.channel.Consume(c.queue.name, "", autoAck, exclusive, false, noWait, nil)
+	msgs, err := c.channel.Consume(c.queue.name,
+		"",
+		c.params["autoAck"].(bool),
+		c.params["exclusive"].(bool),
+		false,
+		c.params["noWait"].(bool),
+		nil)
 
 	if err != nil {
 		log.Println("Failed consuming queue")

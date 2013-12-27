@@ -15,7 +15,7 @@ func main() {
 	// Load the settings
 
 	// Load the params
-	params := map[string]string{
+	params := map[string]interface{}{
 		"something": "something",
 	}
 
